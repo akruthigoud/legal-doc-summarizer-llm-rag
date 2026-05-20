@@ -1,0 +1,12 @@
+streamlit
+langchain
+langchain-openai
+langchain-community
+faiss-cpu
+openai
+pypdf
+python libraries the server needs to install.
+*   `.gitignore`: To ensure you don't accidentally leak your `.env` file or API keys.
+
+**Create-dotenv
+tiktoken
