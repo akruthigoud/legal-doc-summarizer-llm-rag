@@ -61,19 +61,22 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ── Pure Python RAG Engine ───────────────────────────────────
-def split_text_into_chunks(text, chunk_size=1000, chunk_overlap=150):
-    """Pure Python character splitter to avoid text-splitter binary locks."""
+# ── Zero-Dependency Processing Engine ────────────────────────
+def split_text_into_chunks(text, chunk_size=1200, chunk_overlap=200):
+    """Pure character-based split to avoid dependency build errors entirely."""
     chunks = []
     start = 0
+    if not text:
+        return [""]
     while start < len(text):
         end = start + chunk_size
         chunks.append(text[start:end])
         start += (chunk_size - chunk_overlap)
+        if start >= len(text) or chunk_size >= len(text):
+            break
     return chunks
 
 def cosine_similarity(v1, v2):
-    """Calculates similarity score manually using native math algorithms."""
     dot_prod = sum(x * y for x, y in zip(v1, v2))
     mag1 = math.sqrt(sum(x * x for x in v1))
     mag2 = math.sqrt(sum(x * x for x in v2))
@@ -83,11 +86,9 @@ def cosine_similarity(v1, v2):
 
 @st.cache_resource(show_spinner=False)
 def process_and_vectorize_text(text, api_key):
-    """Generates embeddings using the raw OpenAI client wrapper."""
     client = OpenAI(api_key=api_key)
     chunks = split_text_into_chunks(text)
     
-    # Get embeddings for all chunks natively
     response = client.embeddings.create(
         input=chunks,
         model="text-embedding-3-small"
@@ -101,8 +102,7 @@ def process_and_vectorize_text(text, api_key):
         })
     return vector_database
 
-def search_similar_chunks(vector_database, query, api_key, k=4):
-    """Finds top context blocks using our clean pure-math similarity engine."""
+def search_similar_chunks(vector_database, query, api_key, k=3):
     client = OpenAI(api_key=api_key)
     response = client.embeddings.create(
         input=[query],
@@ -115,11 +115,10 @@ def search_similar_chunks(vector_database, query, api_key, k=4):
         score = cosine_similarity(query_embedding, item["embedding"])
         scored_chunks.append((score, item["text"]))
         
-    # Sort descending by score
     scored_chunks.sort(key=lambda x: x[0], reverse=True)
     return [chunk for score, chunk in scored_chunks[:k]]
 
-# ── Helper Processing Core ───────────────────────────────────
+# ── Core Actions ─────────────────────────────────────────────
 def extract_text_from_pdf(file_bytes):
     reader = pypdf.PdfReader(io.BytesIO(file_bytes))
     text = ""
@@ -135,37 +134,22 @@ def summarize_doc(text, api_key):
         model="gpt-3.5-turbo",
         temperature=0,
         messages=[
-            {"role": "system", "value": "You are a precise legal document assistant."},
-            {"role": "user", "content": f"""Summarize this legal document clearly in plain English.
-Include: parties involved, key obligations, important dates, penalty clauses, and key terms.
-Use bullet points. Be concise and professional.
-
-Document: {text[:12000]}
-
-Summary:"""}
+            {"role": "system", "content": "You are a precise legal document assistant."},
+            {"role": "user", "content": f"Summarize this legal document clearly in plain English using bullet points. Focus on parties, dates, obligations, and penalties:\n\n{text[:12000]}"}
         ]
     )
     return response.choices[0].message.content
 
 def answer_question(context_chunks, question, api_key):
     client = OpenAI(api_key=api_key)
-    context_text = "\n\n---NEW CHUNK---\n\n".join(context_chunks)
+    context_text = "\n\n---CONTEXT CHUNK---\n\n".join(context_chunks)
     
     response = client.chat.completions.create(
         model="gpt-3.5-turbo",
         temperature=0,
         messages=[
-            {"role": "system", "content": "You are a precise legal document assistant."},
-            {"role": "user", "content": f"""Answer the question using ONLY the context provided below.
-If the answer is not in the context, say "This information is not found in the document."
-Be accurate, concise, and professional.
-
-Context:
-{context_text}
-
-Question: {question}
-
-Answer:"""}
+            {"role": "system", "content": "You are a precise legal document assistant. Answer using ONLY the context provided. If not found, reply 'This information is not found in the document.'"},
+            {"role": "user", "content": f"Context:\n{context_text}\n\nQuestion: {question}"}
         ]
     )
     return response.choices[0].message.content
@@ -194,11 +178,11 @@ Document: {text[:6000]}"""}
     )
     return response.choices[0].message.content
 
-# ── Main UI Layout ───────────────────────────────────────────
+# ── Main Application Interface ─────────────────────────────────
 st.markdown("""
 <div class="main-header">
   <p class="main-title">⚖️ LegalAI — Intelligent Document Analyzer</p>
-  <p class="main-sub">LLM Pipeline · OpenAI GPT-3.5 · Pure Python Vector Matcher</p>
+  <p class="main-sub">LLM Pipeline · OpenAI GPT-3.5 · Native Compilation-Free Matcher</p>
 </div>
 """, unsafe_allow_html=True)
 
@@ -214,7 +198,7 @@ with st.sidebar:
     uploaded = st.file_uploader("Upload Legal PDF", type="pdf")
     st.divider()
     st.markdown("### 🛠️ Tech Stack")
-    for badge in ["LLM Pipeline", "OpenAI GPT-3.5", "Pure Python Vector Engine", "Streamlit", "Prompt Engineering"]:
+    for badge in ["LLM Pipeline", "OpenAI GPT-3.5", "Pure Python Matcher", "Streamlit"]:
         st.markdown(f'<span class="badge badge-blue">{badge}</span>', unsafe_allow_html=True)
 
 if uploaded:
