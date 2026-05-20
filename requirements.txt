@@ -8,3 +8,4 @@ openai
 pypdf
 python-dotenv
 tiktoken
+langchain-text-splitters
