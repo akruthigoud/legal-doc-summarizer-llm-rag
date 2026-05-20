@@ -80,6 +80,7 @@ def build_vectorstore(text_hash, text):
     embeddings = OpenAIEmbeddings(openai_api_key=os.getenv("OPENAI_API_KEY"))
     splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=150)
     chunks = splitter.create_documents([text])
+    # Initializing chroma entirely in-memory to comply with temporary cloud storage
     return Chroma.from_documents(chunks, embeddings)
 
 def get_llm():
@@ -167,49 +168,46 @@ with st.sidebar:
 
 # Process uploaded file
 if uploaded:
-    with st.spinner("📖 Reading and indexing document..."):
-        file_bytes = uploaded.read()
-        doc_text = extract_text_from_pdf(file_bytes)
-        text_hash = hash(doc_text)
-        vectorstore = build_vectorstore(text_hash, doc_text)
+    if not os.getenv("OPENAI_API_KEY"):
+        st.info("ℹ️ Please enter your OpenAI API Key in the sidebar to process the document.")
+    else:
+        with st.spinner("📖 Reading and indexing document..."):
+            file_bytes = uploaded.read()
+            doc_text = extract_text_from_pdf(file_bytes)
+            text_hash = hash(doc_text)
+            vectorstore = build_vectorstore(text_hash, doc_text)
 
-    word_count = len(doc_text.split())
-    page_count = len(pypdf.PdfReader(io.BytesIO(file_bytes)).pages)
-    char_count = len(doc_text)
+        word_count = len(doc_text.split())
+        page_count = len(pypdf.PdfReader(io.BytesIO(file_bytes)).pages)
+        char_count = len(doc_text)
 
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        st.markdown(f'<div class="metric-card"><div class="metric-val">{page_count}</div>'
-                    f'<div class="metric-label">Pages</div></div>', unsafe_allow_html=True)
-    with c2:
-        st.markdown(f'<div class="metric-card"><div class="metric-val">{word_count:,}</div>'
-                    f'<div class="metric-label">Words</div></div>', unsafe_allow_html=True)
-    with c3:
-        st.markdown(f'<div class="metric-card"><div class="metric-val">{char_count:,}</div>'
-                    f'<div class="metric-label">Characters</div></div>', unsafe_allow_html=True)
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            st.markdown(f'<div class="metric-card"><div class="metric-val">{page_count}</div>'
+                        f'<div class="metric-label">Pages</div></div>', unsafe_allow_html=True)
+        with c2:
+            st.markdown(f'<div class="metric-card"><div class="metric-val">{word_count:,}</div>'
+                        f'<div class="metric-label">Words</div></div>', unsafe_allow_html=True)
+        with c3:
+            st.markdown(f'<div class="metric-card"><div class="metric-val">{char_count:,}</div>'
+                        f'<div class="metric-label">Characters</div></div>', unsafe_allow_html=True)
 
-    st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown("<br>", unsafe_allow_html=True)
 
-    tab1, tab2, tab3, tab4 = st.tabs(["📝 Summary", "💬 Ask Questions", "🔍 Extract Clauses", "📄 Raw Text"])
+        tab1, tab2, tab3, tab4 = st.tabs(["📝 Summary", "💬 Ask Questions", "🔍 Extract Clauses", "📄 Raw Text"])
 
-    with tab1:
-        st.markdown("#### 📝 AI Document Summary")
-        if st.button("Generate Summary", key="sum_btn"):
-            if not os.getenv("OPENAI_API_KEY"):
-                st.error("Please enter your OpenAI API key in the sidebar.")
-            else:
+        with tab1:
+            st.markdown("#### 📝 AI Document Summary")
+            if st.button("Generate Summary", key="sum_btn"):
                 with st.spinner("Summarizing document with AI..."):
                     summary = summarize_doc(doc_text)
                 st.markdown(f'<div class="result-box">{summary}</div>', unsafe_allow_html=True)
 
-    with tab2:
-        st.markdown("#### 💬 Ask Questions About Your Document")
-        st.markdown("*Ask anything about the document — parties, dates, obligations, clauses...*")
-        question = st.text_input("Your question:", placeholder="Who are the parties involved in this contract?")
-        if st.button("Get Answer", key="qa_btn") and question:
-            if not os.getenv("OPENAI_API_KEY"):
-                st.error("Please enter your OpenAI API key in the sidebar.")
-            else:
+        with tab2:
+            st.markdown("#### 💬 Ask Questions About Your Document")
+            st.markdown("*Ask anything about the document — parties, dates, obligations, clauses...*")
+            question = st.text_input("Your question:", placeholder="Who are the parties involved in this contract?")
+            if st.button("Get Answer", key="qa_btn") and question:
                 with st.spinner("Searching document and generating answer..."):
                     answer, sources = answer_question(vectorstore, question)
                 st.markdown(f'<div class="answer-box"><strong>Answer:</strong><br><br>{answer}</div>',
@@ -218,37 +216,31 @@ if uploaded:
                     for i, doc in enumerate(sources, 1):
                         st.markdown(f"**Source {i}:** {doc.page_content[:300]}...")
 
-        st.markdown("**Try these example questions:**")
-        examples = ["Who are the parties in this agreement?",
-                    "What are the payment terms?",
-                    "What happens in case of breach of contract?",
-                    "What is the governing law?"]
-        cols = st.columns(2)
-        for i, ex in enumerate(examples):
-            with cols[i % 2]:
-                if st.button(ex, key=f"ex_{i}"):
-                    if not os.getenv("OPENAI_API_KEY"):
-                        st.error("Please enter your OpenAI API key.")
-                    else:
+            st.markdown("**Try these example questions:**")
+            examples = ["Who are the parties in this agreement?",
+                        "What are the payment terms?",
+                        "What happens in case of breach of contract?",
+                        "What is the governing law?"]
+            cols = st.columns(2)
+            for i, ex in enumerate(examples):
+                with cols[i % 2]:
+                    if st.button(ex, key=f"ex_{i}"):
                         with st.spinner("Answering..."):
                             ans, _ = answer_question(vectorstore, ex)
                         st.markdown(f'<div class="answer-box">{ans}</div>', unsafe_allow_html=True)
 
-    with tab3:
-        st.markdown("#### 🔍 Extract Key Legal Clauses")
-        if st.button("Extract Clauses", key="clause_btn"):
-            if not os.getenv("OPENAI_API_KEY"):
-                st.error("Please enter your OpenAI API key in the sidebar.")
-            else:
+        with tab3:
+            st.markdown("#### 🔍 Extract Key Legal Clauses")
+            if st.button("Extract Clauses", key="clause_btn"):
                 with st.spinner("Extracting legal clauses..."):
                     clauses = extract_clauses(doc_text)
                 st.markdown(f'<div class="result-box"><pre style="color:#e2e8f0;font-family:Inter;white-space:pre-wrap">{clauses}</pre></div>',
                             unsafe_allow_html=True)
 
-    with tab4:
-        st.markdown("#### 📄 Extracted Text")
-        st.text_area("Raw document text:", doc_text[:5000] + "..." if len(doc_text) > 5000 else doc_text,
-                     height=400)
+        with tab4:
+            st.markdown("#### 📄 Extracted Text")
+            st.text_area("Raw document text:", doc_text[:5000] + "..." if len(doc_text) > 5000 else doc_text,
+                         height=400)
 
 else:
     st.markdown("""
