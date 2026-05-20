@@ -1,13 +1,3 @@
-# ============================================================
-# PROJECT 1 — Legal Document Summarizer & QA System
-# MAJOR PROJECT | LLM + RAG + LangChain + OpenAI + FAISS
-# ============================================================
-# HOW TO RUN:
-#   pip install streamlit langchain langchain-openai langchain-community faiss-cpu openai pypdf python-dotenv tiktoken
-#   Create .env file with: OPENAI_API_KEY=your_key_here
-#   streamlit run PROJECT1_legal_doc_app.py
-# ============================================================
-
 import os
 import io
 import streamlit as st
@@ -33,7 +23,7 @@ st.set_page_config(
 # ── Styling ──────────────────────────────────────────────────
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght=400;500;600;700&display=swap');
 * { font-family: 'Inter', sans-serif; }
 .stApp { background: #0a0e1a; }
 .main-header {
@@ -109,7 +99,7 @@ Document: {text}
 
 Summary:""")
     chain = load_summarize_chain(llm, chain_type="map_reduce",
-                                  map_prompt=prompt, combine_prompt=prompt)
+                                 map_prompt=prompt, combine_prompt=prompt)
     return chain.invoke({"input_documents": chunks})["output_text"]
 
 def answer_question(vectorstore, question):
@@ -172,7 +162,7 @@ with st.sidebar:
     st.divider()
     st.markdown("### 🛠️ Tech Stack")
     for badge in ["LLM · RAG · LangChain", "OpenAI GPT-3.5", "FAISS Vector DB",
-                   "Streamlit · Python", "Prompt Engineering"]:
+                  "Streamlit · Python", "Prompt Engineering"]:
         st.markdown(f'<span class="badge badge-blue">{badge}</span>', unsafe_allow_html=True)
 
 # Process uploaded file
@@ -245,43 +235,4 @@ if uploaded:
                         st.markdown(f'<div class="answer-box">{ans}</div>', unsafe_allow_html=True)
 
     with tab3:
-        st.markdown("#### 🔍 Extract Key Legal Clauses")
-        if st.button("Extract Clauses", key="clause_btn"):
-            if not os.getenv("OPENAI_API_KEY"):
-                st.error("Please enter your OpenAI API key in the sidebar.")
-            else:
-                with st.spinner("Extracting legal clauses..."):
-                    clauses = extract_clauses(doc_text)
-                st.markdown(f'<div class="result-box"><pre style="color:#e2e8f0;font-family:Inter;white-space:pre-wrap">{clauses}</pre></div>',
-                            unsafe_allow_html=True)
-
-    with tab4:
-        st.markdown("#### 📄 Extracted Text")
-        st.text_area("Raw document text:", doc_text[:5000] + "..." if len(doc_text) > 5000 else doc_text,
-                     height=400)
-
-else:
-    st.markdown("""
-    <div style="text-align:center;padding:80px 20px;color:#64748b">
-        <div style="font-size:64px;margin-bottom:16px">⚖️</div>
-        <h3 style="color:#94a3b8;font-weight:600">Upload a Legal Document to Begin</h3>
-        <p style="color:#64748b;margin-top:8px">Upload any PDF contract, agreement, or legal document<br>
-        and get AI-powered summaries, Q&A, and clause extraction.</p>
-        <br>
-        <div style="display:flex;justify-content:center;gap:12px;flex-wrap:wrap">
-            <span class="badge badge-blue">LLM + RAG</span>
-            <span class="badge badge-green">OpenAI GPT</span>
-            <span class="badge badge-blue">FAISS Vector Search</span>
-            <span class="badge badge-green">LangChain</span>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-# Footer
-st.markdown("""
-<div style="text-align:center;padding:20px;color:#475569;font-size:12px;margin-top:40px;
-            border-top:1px solid #1e293b">
-    Built by <strong style="color:#60a5fa">Chukka Akruthi Goud</strong> ·
-    LLM + RAG · LangChain · OpenAI · FAISS · Streamlit
-</div>
-""", unsafe_allow_html=True)
+        st.
