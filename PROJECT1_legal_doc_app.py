@@ -4,7 +4,7 @@ import streamlit as st
 import pypdf
 from dotenv import load_dotenv
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_community.vectorstores import Chroma
+from langchain_community.vectorstores import FAISS
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 from langchain.chains import RetrievalQA
 from langchain.prompts import PromptTemplate
@@ -80,7 +80,7 @@ def build_vectorstore(text_hash, text):
     embeddings = OpenAIEmbeddings(openai_api_key=os.getenv("OPENAI_API_KEY"))
     splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=150)
     chunks = splitter.create_documents([text])
-    return Chroma.from_documents(chunks, embeddings)
+    return FAISS.from_documents(chunks, embeddings)
 
 def get_llm():
     return ChatOpenAI(model="gpt-3.5-turbo", temperature=0,
@@ -161,7 +161,7 @@ with st.sidebar:
                                   help="Upload any legal document, contract, or agreement")
     st.divider()
     st.markdown("### 🛠️ Tech Stack")
-    for badge in ["LLM · RAG · LangChain", "OpenAI GPT-3.5", "Chroma DB",
+    for badge in ["LLM · RAG · LangChain", "OpenAI GPT-3.5", "FAISS Storage",
                   "Streamlit · Python", "Prompt Engineering"]:
         st.markdown(f'<span class="badge badge-blue">{badge}</span>', unsafe_allow_html=True)
 
@@ -252,7 +252,7 @@ else:
         <div style="display:flex;justify-content:center;gap:12px;flex-wrap:wrap">
             <span class="badge badge-blue">LLM + RAG</span>
             <span class="badge badge-green">OpenAI GPT</span>
-            <span class="badge badge-blue">Chroma Vector Search</span>
+            <span class="badge badge-blue">FAISS Storage</span>
             <span class="badge badge-green">LangChain</span>
         </div>
     </div>
@@ -263,6 +263,6 @@ st.markdown("""
 <div style="text-align:center;padding:20px;color:#475569;font-size:12px;margin-top:40px;
             border-top:1px solid #1e293b">
     Built by <strong style="color:#60a5fa">Chukka Akruthi Goud</strong> ·
-    LLM + RAG · LangChain · OpenAI · Chroma · Streamlit
+    LLM + RAG · LangChain · OpenAI · FAISS · Streamlit
 </div>
 """, unsafe_allow_html=True)
