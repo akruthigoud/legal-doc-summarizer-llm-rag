@@ -80,7 +80,6 @@ def build_vectorstore(text_hash, text):
     embeddings = OpenAIEmbeddings(openai_api_key=os.getenv("OPENAI_API_KEY"))
     splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=150)
     chunks = splitter.create_documents([text])
-    # Initializing chroma entirely in-memory to comply with temporary cloud storage
     return Chroma.from_documents(chunks, embeddings)
 
 def get_llm():
