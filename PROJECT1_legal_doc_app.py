@@ -1,276 +1,262 @@
-import os
-import io
-import math
+bash
+
+cat > /mnt/user-data/outputs/project5_ai_chatbot.py << 'PYEOF'
+# ================================================================
+# PROJECT 5 — AI Chatbot with Memory & Document QA
+# Tech: LangChain + OpenAI + FAISS + Streamlit
+# GitHub Repo Name: langchain-ai-chatbot
+# ================================================================
+# SETUP:
+#   pip install streamlit langchain-openai langchain-community
+#              langchain-text-splitters langchain-core faiss-cpu
+#              openai pypdf python-dotenv
+#   streamlit run project5_ai_chatbot.py
+# ================================================================
+
+import os, io
 import streamlit as st
 import pypdf
 from dotenv import load_dotenv
-from openai import OpenAI
+from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_community.vectorstores import FAISS
+from langchain_core.prompts import PromptTemplate
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.messages import HumanMessage, AIMessage
 
 load_dotenv()
 
-# ── Page Config ─────────────────────────────────────────────
-st.set_page_config(
-    page_title="LegalAI — Document Analyzer",
-    page_icon="⚖️",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+st.set_page_config(page_title="ChatAI", page_icon="🤖", layout="wide")
 
-# ── Styling ──────────────────────────────────────────────────
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght=400;500;600;700&display=swap');
-* { font-family: 'Inter', sans-serif; }
-.stApp { background: #0a0e1a; }
-.main-header {
-    background: linear-gradient(135deg, #1a1f3a 0%, #0f1628 100%);
-    padding: 30px 40px; border-radius: 16px;
-    border: 1px solid #2a3050; margin-bottom: 24px;
-    box-shadow: 0 4px 24px rgba(0,0,0,0.3);
-}
-.main-title { color: #60a5fa; font-size: 32px; font-weight: 700; margin: 0; }
-.main-sub { color: #94a3b8; font-size: 15px; margin: 6px 0 0 0; }
-.metric-card {
-    background: #1a1f3a; border: 1px solid #2a3050;
-    border-radius: 12px; padding: 20px; text-align: center;
-}
-.metric-val { color: #60a5fa; font-size: 28px; font-weight: 700; }
-.metric-label { color: #94a3b8; font-size: 13px; margin-top: 4px; }
-.result-box {
-    background: #1a1f3a; border: 1px solid #2a3050;
-    border-radius: 12px; padding: 24px; margin-top: 16px;
-    line-height: 1.8; color: #e2e8f0;
-}
-.answer-box {
-    background: linear-gradient(135deg, #1e3a5f 0%, #1a2f4a 100%);
-    border: 1px solid #3b6ea5; border-radius: 12px; padding: 24px;
-    margin-top: 16px; color: #e2e8f0; line-height: 1.8;
-}
-.badge {
-    display: inline-block; padding: 4px 12px; border-radius: 20px;
-    font-size: 12px; font-weight: 600; margin: 3px;
-}
-.badge-blue { background: #1e3a5f; color: #60a5fa; border: 1px solid #3b6ea5; }
-.badge-green { background: #1a3a2a; color: #4ade80; border: 1px solid #2d6a4f; }
-.stButton > button {
-    background: linear-gradient(135deg, #3b82f6, #2563eb) !important;
-    color: white !important; border: none !important; border-radius: 8px !important;
-    font-weight: 600 !important; padding: 10px 24px !important;
-}
-.stButton > button:hover { opacity: 0.9 !important; transform: translateY(-1px) !important; }
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+html,body,[class*="css"]{font-family:'Inter',sans-serif;}
+.stApp{background:#0a0e1a;}
+.header{background:linear-gradient(135deg,#1a1f3a,#0f1628);padding:24px 32px;
+        border-radius:14px;border:1px solid #2a3050;margin-bottom:16px;}
+.h-title{color:#38bdf8;font-size:26px;font-weight:700;margin:0;}
+.h-sub{color:#94a3b8;font-size:13px;margin:4px 0 0;}
+.user-msg{background:linear-gradient(135deg,#1e3a5f,#1a2f4a);border:1px solid #3b6ea5;
+          border-radius:14px 14px 4px 14px;padding:13px 17px;margin:7px 0 7px 50px;
+          color:#e2e8f0;line-height:1.75;font-size:14px;}
+.bot-msg{background:#1a1f3a;border:1px solid #2a3050;border-radius:14px 14px 14px 4px;
+         padding:13px 17px;margin:7px 50px 7px 0;color:#e2e8f0;line-height:1.75;font-size:14px;}
+.lbl-user{color:#38bdf8;font-size:11px;font-weight:600;text-align:right;margin:3px 3px 0;}
+.lbl-bot{color:#94a3b8;font-size:11px;font-weight:600;margin:0 0 3px 3px;}
+.card{background:#1a1f3a;border:1px solid #2a3050;border-radius:10px;padding:14px 16px;margin:5px 0;}
+.card-lbl{color:#38bdf8;font-size:11px;font-weight:600;}
+.card-val{color:#e2e8f0;font-size:13px;margin-top:2px;}
+.empty-state{text-align:center;padding:70px 0;color:#475569;}
+.stButton>button{background:linear-gradient(135deg,#0ea5e9,#0284c7)!important;
+                 color:white!important;border:none!important;border-radius:8px!important;font-weight:600!important;}
+.stTextInput>div>input{background:#1a1f3a!important;color:#e2e8f0!important;
+                       border-color:#2a3050!important;border-radius:8px!important;}
 </style>
 """, unsafe_allow_html=True)
 
-# ── Zero-Dependency Processing Engine ────────────────────────
-def split_text_into_chunks(text, chunk_size=1200, chunk_overlap=200):
-    """Pure character-based split to avoid dependency build errors entirely."""
-    chunks = []
-    start = 0
-    if not text:
-        return [""]
-    while start < len(text):
-        end = start + chunk_size
-        chunks.append(text[start:end])
-        start += (chunk_size - chunk_overlap)
-        if start >= len(text) or chunk_size >= len(text):
-            break
-    return chunks
+# ── Session State Init ───────────────────────────────────────
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+if "vectorstore" not in st.session_state:
+    st.session_state.vectorstore = None
+if "doc_name" not in st.session_state:
+    st.session_state.doc_name = None
+if "mode" not in st.session_state:
+    st.session_state.mode = "general"
 
-def cosine_similarity(v1, v2):
-    dot_prod = sum(x * y for x, y in zip(v1, v2))
-    mag1 = math.sqrt(sum(x * x for x in v1))
-    mag2 = math.sqrt(sum(x * x for x in v2))
-    if not mag1 or not mag2:
-        return 0
-    return dot_prod / (mag1 * mag2)
+# ── Core Functions ───────────────────────────────────────────
+def get_llm(api_key: str) -> ChatOpenAI:
+    return ChatOpenAI(model="gpt-3.5-turbo", temperature=0.7, openai_api_key=api_key)
 
-@st.cache_resource(show_spinner=False)
-def process_and_vectorize_text(text, api_key):
-    client = OpenAI(api_key=api_key)
-    chunks = split_text_into_chunks(text)
-    
-    response = client.embeddings.create(
-        input=chunks,
-        model="text-embedding-3-small"
-    )
-    
-    vector_database = []
-    for i, data in enumerate(response.data):
-        vector_database.append({
-            "text": chunks[i],
-            "embedding": data.embedding
-        })
-    return vector_database
-
-def search_similar_chunks(vector_database, query, api_key, k=3):
-    client = OpenAI(api_key=api_key)
-    response = client.embeddings.create(
-        input=[query],
-        model="text-embedding-3-small"
-    )
-    query_embedding = response.data[0].embedding
-    
-    scored_chunks = []
-    for item in vector_database:
-        score = cosine_similarity(query_embedding, item["embedding"])
-        scored_chunks.append((score, item["text"]))
-        
-    scored_chunks.sort(key=lambda x: x[0], reverse=True)
-    return [chunk for score, chunk in scored_chunks[:k]]
-
-# ── Core Actions ─────────────────────────────────────────────
-def extract_text_from_pdf(file_bytes):
+def load_pdf(file_bytes: bytes) -> str:
     reader = pypdf.PdfReader(io.BytesIO(file_bytes))
-    text = ""
-    for page in reader.pages:
-        extracted = page.extract_text()
-        if extracted:
-            text += extracted + "\n"
-    return text
+    return "\n".join(p.extract_text() or "" for p in reader.pages)
 
-def summarize_doc(text, api_key):
-    client = OpenAI(api_key=api_key)
-    response = client.chat.completions.create(
-        model="gpt-3.5-turbo",
-        temperature=0,
-        messages=[
-            {"role": "system", "content": "You are a precise legal document assistant."},
-            {"role": "user", "content": f"Summarize this legal document clearly in plain English using bullet points. Focus on parties, dates, obligations, and penalties:\n\n{text[:12000]}"}
-        ]
-    )
-    return response.choices[0].message.content
+def build_vectorstore(text: str, api_key: str) -> FAISS:
+    splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=150)
+    docs = splitter.create_documents([text])
+    embeddings = OpenAIEmbeddings(openai_api_key=api_key)
+    return FAISS.from_documents(docs, embeddings)
 
-def answer_question(context_chunks, question, api_key):
-    client = OpenAI(api_key=api_key)
-    context_text = "\n\n---CONTEXT CHUNK---\n\n".join(context_chunks)
-    
-    response = client.chat.completions.create(
-        model="gpt-3.5-turbo",
-        temperature=0,
-        messages=[
-            {"role": "system", "content": "You are a precise legal document assistant. Answer using ONLY the context provided. If not found, reply 'This information is not found in the document.'"},
-            {"role": "user", "content": f"Context:\n{context_text}\n\nQuestion: {question}"}
-        ]
-    )
-    return response.choices[0].message.content
+def build_history_string(messages: list) -> str:
+    history = []
+    for m in messages[-10:]:
+        role = "User" if m["role"] == "user" else "Assistant"
+        history.append(f"{role}: {m['content']}")
+    return "\n".join(history)
 
-def extract_clauses(text, api_key):
-    client = OpenAI(api_key=api_key)
-    response = client.chat.completions.create(
-        model="gpt-3.5-turbo",
-        temperature=0,
-        messages=[
-            {"role": "system", "content": "You are a precise legal document assistant."},
-            {"role": "user", "content": f"""Extract key information from this legal document.
-Return in this exact format:
+def chat_general(user_input: str, history: list, api_key: str) -> str:
+    llm = get_llm(api_key)
+    history_str = build_history_string(history)
+    prompt = f"""You are ChatAI, a helpful and intelligent AI assistant.
+You have memory of the conversation. Give clear, accurate, well-structured responses.
 
-PARTIES: [list parties]
-EFFECTIVE DATE: [date]
-TERMINATION DATE: [date or N/A]
-KEY OBLIGATIONS: [bullet points]
-PENALTY CLAUSES: [bullet points or None]
-GOVERNING LAW: [jurisdiction]
-CONFIDENTIALITY: [Yes/No and brief details]
-DISPUTE RESOLUTION: [method]
+Conversation History:
+{history_str}
 
-Document: {text[:6000]}"""}
-        ]
-    )
-    return response.choices[0].message.content
+User: {user_input}
+ChatAI:"""
+    return llm.invoke(prompt).content
 
-# ── Main Application Interface ─────────────────────────────────
+def chat_with_doc(user_input: str, vectorstore: FAISS, api_key: str) -> str:
+    llm = get_llm(api_key)
+    retriever = vectorstore.as_retriever(search_kwargs={"k": 4})
+    docs = retriever.invoke(user_input)
+    context = "\n\n".join(d.page_content for d in docs)
+    prompt = f"""You are a document expert assistant.
+Answer using ONLY the provided document context.
+If the answer is not in the document, say "This information is not in the uploaded document."
+
+Document Context:
+{context}
+
+Question: {user_input}
+
+Answer:"""
+    return llm.invoke(prompt).content
+
+QUICK_QUESTIONS_GENERAL = [
+    "What is RAG (Retrieval-Augmented Generation)?",
+    "Explain LangChain in simple terms",
+    "How does prompt engineering work?",
+    "What is the difference between CNN and LSTM?",
+    "How do vector databases work?",
+    "What is LangGraph used for?",
+]
+
+QUICK_QUESTIONS_DOC = [
+    "Summarize this document",
+    "What are the key points?",
+    "Who are the main parties?",
+    "What are the important dates?",
+    "What obligations are listed?",
+]
+
+# ── UI ───────────────────────────────────────────────────────
 st.markdown("""
-<div class="main-header">
-  <p class="main-title">⚖️ LegalAI — Intelligent Document Analyzer</p>
-  <p class="main-sub">LLM Pipeline · OpenAI GPT-3.5 · Native Compilation-Free Matcher</p>
-</div>
-""", unsafe_allow_html=True)
+<div class="header">
+  <p class="h-title">🤖 ChatAI — Intelligent Assistant</p>
+  <p class="h-sub">LangChain · OpenAI GPT · FAISS · Conversation Memory · Document Q&A</p>
+</div>""", unsafe_allow_html=True)
 
+# Sidebar
 with st.sidebar:
-    st.markdown("### 🔑 Configuration")
+    st.markdown("### 🔑 API Key")
     api_key = st.text_input("OpenAI API Key", type="password",
-                             value=os.getenv("OPENAI_API_KEY", ""),
-                             help="Enter your OpenAI API key")
+                             value=os.getenv("OPENAI_API_KEY",""), placeholder="sk-...")
     if api_key:
         os.environ["OPENAI_API_KEY"] = api_key
     st.divider()
-    st.markdown("### 📄 Upload Document")
-    uploaded = st.file_uploader("Upload Legal PDF", type="pdf")
+
+    st.markdown("### 💬 Mode")
+    mode_choice = st.radio("Select:", ["General Chat", "Document QA"])
+    st.session_state.mode = "general" if mode_choice == "General Chat" else "document"
     st.divider()
-    st.markdown("### 🛠️ Tech Stack")
-    for badge in ["LLM Pipeline", "OpenAI GPT-3.5", "Pure Python Matcher", "Streamlit"]:
-        st.markdown(f'<span class="badge badge-blue">{badge}</span>', unsafe_allow_html=True)
 
-if uploaded:
-    if not os.environ.get("OPENAI_API_KEY"):
-        st.info("ℹ️ Please enter your OpenAI API Key in the sidebar to process the document.")
-    else:
-        current_api_key = os.environ.get("OPENAI_API_KEY")
-        with st.spinner("📖 Reading and indexing document layers..."):
-            file_bytes = uploaded.read()
-            doc_text = extract_text_from_pdf(file_bytes)
-            vector_db = process_and_vectorize_text(doc_text, current_api_key)
+    if st.session_state.mode == "document":
+        st.markdown("### 📄 Upload PDF")
+        uploaded_doc = st.file_uploader("Upload PDF:", type=["pdf"])
+        if uploaded_doc:
+            if uploaded_doc.name != st.session_state.doc_name:
+                if not api_key:
+                    st.error("Enter API key first.")
+                else:
+                    with st.spinner("Indexing document..."):
+                        text = load_pdf(uploaded_doc.read())
+                        st.session_state.vectorstore = build_vectorstore(text, api_key)
+                        st.session_state.doc_name = uploaded_doc.name
+                    st.success(f"✅ '{uploaded_doc.name}' ready!")
+        st.divider()
 
-        word_count = len(doc_text.split())
-        page_count = len(pypdf.PdfReader(io.BytesIO(file_bytes)).pages)
-        char_count = len(doc_text)
+    st.markdown("### 💡 Quick Questions")
+    questions = QUICK_QUESTIONS_DOC if st.session_state.mode == "document" else QUICK_QUESTIONS_GENERAL
+    for q in questions:
+        if st.button(q, key=f"qq_{hash(q)}", use_container_width=True):
+            st.session_state["queued_q"] = q
+    st.divider()
 
-        c1, c2, c3 = st.columns(3)
-        with c1:
-            st.markdown(f'<div class="metric-card"><div class="metric-val">{page_count}</div>'
-                        f'<div class="metric-label">Pages</div></div>', unsafe_allow_html=True)
-        with c2:
-            st.markdown(f'<div class="metric-card"><div class="metric-val">{word_count:,}</div>'
-                        f'<div class="metric-label">Words</div></div>', unsafe_allow_html=True)
-        with c3:
-            st.markdown(f'<div class="metric-card"><div class="metric-val">{char_count:,}</div>'
-                        f'<div class="metric-label">Characters</div></div>', unsafe_allow_html=True)
+    if st.button("🗑️ Clear Chat", use_container_width=True):
+        st.session_state.messages = []
+        st.rerun()
 
-        st.markdown("<br>", unsafe_allow_html=True)
-        tab1, tab2, tab3, tab4 = st.tabs(["📝 Summary", "💬 Ask Questions", "🔍 Extract Clauses", "📄 Raw Text"])
+    st.markdown("### 📊 Session")
+    st.markdown(f'<div class="card"><div class="card-lbl">Messages</div>'
+                f'<div class="card-val">{len(st.session_state.messages)}</div></div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="card"><div class="card-lbl">Mode</div>'
+                f'<div class="card-val">{"Document QA" if st.session_state.mode=="document" else "General Chat"}</div></div>', unsafe_allow_html=True)
+    if st.session_state.doc_name:
+        st.markdown(f'<div class="card"><div class="card-lbl">Document</div>'
+                    f'<div class="card-val">{st.session_state.doc_name}</div></div>', unsafe_allow_html=True)
 
-        with tab1:
-            st.markdown("#### 📝 AI Document Summary")
-            if st.button("Generate Summary", key="sum_btn"):
-                with st.spinner("Summarizing legal parameters..."):
-                    summary = summarize_doc(doc_text, current_api_key)
-                st.markdown(f'<div class="result-box">{summary}</div>', unsafe_allow_html=True)
-
-        with tab2:
-            st.markdown("#### 💬 Ask Questions About Your Document")
-            question = st.text_input("Your question:", placeholder="Who are the parties involved?")
-            if st.button("Get Answer", key="qa_btn") and question:
-                with st.spinner("Calculating matching nodes and generating response..."):
-                    matched_chunks = search_similar_chunks(vector_db, question, current_api_key)
-                    answer = answer_question(matched_chunks, question, current_api_key)
-                st.markdown(f'<div class="answer-box"><strong>Answer:</strong><br><br>{answer}</div>', unsafe_allow_html=True)
-                with st.expander("📎 Source Text Blocks Natively Matched"):
-                    for i, chunk in enumerate(matched_chunks, 1):
-                        st.markdown(f"**Context Block {i}:** {chunk[:300]}...")
-
-        with tab3:
-            st.markdown("#### 🔍 Extract Key Legal Clauses")
-            if st.button("Extract Clauses", key="clause_btn"):
-                with st.spinner("Parsing structure patterns..."):
-                    clauses = extract_clauses(doc_text, current_api_key)
-                st.markdown(f'<div class="result-box"><pre style="color:#e2e8f0;font-family:Inter;white-space:pre-wrap">{clauses}</pre></div>', unsafe_allow_html=True)
-
-        with tab4:
-            st.markdown("#### 📄 Extracted Text")
-            st.text_area("Raw document text:", doc_text[:5000] + "..." if len(doc_text) > 5000 else doc_text, height=400)
-else:
+# Chat window
+if not st.session_state.messages:
     st.markdown("""
-    <div style="text-align:center;padding:80px 20px;color:#64748b">
-        <div style="font-size:64px;margin-bottom:16px">⚖️</div>
-        <h3 style="color:#94a3b8;font-weight:600">Upload a Legal Document to Begin</h3>
-        <p style="color:#64748b;margin-top:8px">Upload any PDF contract, agreement, or legal document<br>
-        and get AI-powered summaries, Q&A, and clause extraction.</p>
-    </div>
-    """, unsafe_allow_html=True)
+    <div class="empty-state">
+        <div style="font-size:56px">🤖</div>
+        <h3 style="color:#94a3b8;margin-top:12px">Welcome to ChatAI!</h3>
+        <p style="color:#64748b">Ask me anything about AI, ML, or upload a document for Q&A.<br>
+        I remember our full conversation.</p>
+    </div>""", unsafe_allow_html=True)
+else:
+    for msg in st.session_state.messages:
+        if msg["role"] == "user":
+            st.markdown('<div class="lbl-user">You</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="user-msg">{msg["content"]}</div>', unsafe_allow_html=True)
+        else:
+            st.markdown('<div class="lbl-bot">🤖 ChatAI</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="bot-msg">{msg["content"]}</div>', unsafe_allow_html=True)
 
-# Footer
-st.markdown("""
-<div style="text-align:center;padding:20px;color:#475569;font-size:12px;margin-top:40px;border-top:1px solid #1e293b">
-    Built by <strong style="color:#60a5fa">Chukka Akruthi Goud</strong> · LLM Pipeline · OpenAI · Streamlit
-</div>
-""", unsafe_allow_html=True)
+st.markdown("<br>", unsafe_allow_html=True)
+
+# Handle queued quick question
+queued = st.session_state.pop("queued_q", "")
+
+col_in, col_send = st.columns([6, 1])
+with col_in:
+    user_input = st.text_input(
+        "Message",
+        value=queued,
+        placeholder="Type your message and press Enter or click Send...",
+        label_visibility="collapsed",
+        key="chat_input"
+    )
+with col_send:
+    send_btn = st.button("Send ▶", use_container_width=True)
+
+if (send_btn or user_input) and user_input.strip():
+    if not api_key:
+        st.error("Please enter your OpenAI API key in the sidebar.")
+    else:
+        st.session_state.messages.append({"role": "user", "content": user_input})
+        with st.spinner("Thinking..."):
+            try:
+                if st.session_state.mode == "document":
+                    if not st.session_state.vectorstore:
+                        response = "Please upload a PDF document first using the sidebar."
+                    else:
+                        response = chat_with_doc(user_input, st.session_state.vectorstore, api_key)
+                else:
+                    response = chat_general(user_input, st.session_state.messages[:-1], api_key)
+            except Exception as e:
+                response = f"Sorry, I encountered an error: {str(e)}"
+        st.session_state.messages.append({"role": "assistant", "content": response})
+        st.rerun()
+
+st.markdown("""<div style="text-align:center;padding:16px;color:#475569;font-size:12px;
+border-top:1px solid #1e293b;margin-top:20px">
+Built by <strong style="color:#38bdf8">Chukka Akruthi Goud</strong> ·
+LangChain · OpenAI · FAISS · Conversation Memory · Streamlit</div>""", unsafe_allow_html=True)
+PYEOF
+python3 -c "
+import ast
+with open('/mnt/user-data/outputs/project5_ai_chatbot.py') as f:
+    source = f.read()
+ast.parse(source)
+print('Project 5: SYNTAX OK')
+"
+Output
+
+Project 5: SYNTAX OK
+Done
+
