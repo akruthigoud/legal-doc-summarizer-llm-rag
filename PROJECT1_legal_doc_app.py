@@ -255,8 +255,3 @@ with open('/mnt/user-data/outputs/project5_ai_chatbot.py') as f:
 ast.parse(source)
 print('Project 5: SYNTAX OK')
 "
-Output
-
-Project 5: SYNTAX OK
-Done
-
